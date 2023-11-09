@@ -62,11 +62,11 @@ public class MainActivity extends AppCompatActivity implements NotesListener {
 
         ImageView imageAddNoteMain = findViewById(R.id.imageAddNoteMain);
         imageAddNoteMain.setOnClickListener((v) -> {
-                startActivityForResult(
-                        new Intent(getApplicationContext(), CreateNoteActivity.class),
-                        REQUEST_CODE_ADD_NOTE
-                );
-            });
+            startActivityForResult(
+                    new Intent(getApplicationContext(), CreateNoteActivity.class),
+                    REQUEST_CODE_ADD_NOTE
+            );
+        });
 
         notesRecyclerView = findViewById(R.id.notesRecyclerView);
         notesRecyclerView.setLayoutManager(
@@ -135,11 +135,49 @@ public class MainActivity extends AppCompatActivity implements NotesListener {
 
     }
     private void selectImage() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        if(intent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(intent, REQUEST_CODE_SELECT_IMAGE);
-        }
+        // open gallery
+        Intent intent = new Intent(Intent.ACTION_PICK);
+        intent.setType("image/*");
+        startActivityForResult(intent, REQUEST_CODE_SELECT_IMAGE);
     }
+
+    // handle permission result
+    // if permission granted, open gallery
+    // else show toast
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (resultCode == RESULT_OK && requestCode == REQUEST_CODE_SELECT_IMAGE) {
+            if (data != null) {
+                Uri selectedImageUri = data.getData();
+                if (selectedImageUri != null) {
+                    try {
+                        String selectedImagePath = getPathFromUri(selectedImageUri);
+                        Intent intent = new Intent(getApplicationContext(), CreateNoteActivity.class);
+                        intent.putExtra("isFromQuickActions", true);
+                        intent.putExtra("quickActionType", "image");
+                        intent.putExtra("imagePath", selectedImagePath);
+                        startActivityForResult(intent, REQUEST_CODE_ADD_NOTE);
+                    } catch (Exception exception) {
+                        Toast.makeText(this, exception.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+            } else if (requestCode == REQUEST_CODE_STORAGE_PERMISSION) {
+                selectImage();
+            }
+        }
+
+    }
+
+
+//    public static Bitmap getPicture(Uri selectedImage) {
+//        String[] filePathColumn = { MediaStore.Images.Media.DATA };
+//        Cursor cursor = getContext().getContentResolver().query(selectedImage, filePathColumn, null, null, null);
+//        cursor.moveToFirst();
+//        int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+//        String picturePath = cursor.getString(columnIndex);
+//        cursor.close();
+//        return BitmapFactory.decodeFile(picturePath);
+//    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -179,67 +217,67 @@ public class MainActivity extends AppCompatActivity implements NotesListener {
 
     private void getNotes(final int requestCode, final boolean isNoteDeleted) {
 
-            @SuppressLint("StaticFieldLeak")
-            class GetNotesTask extends AsyncTask<Void, Void, List<Note>> {
+        @SuppressLint("StaticFieldLeak")
+        class GetNotesTask extends AsyncTask<Void, Void, List<Note>> {
 
-                @Override
-                protected List<Note> doInBackground(Void... voids) {
-                    return NotesDatabase
-                            .getNotesDatabase(getApplicationContext())
-                            .noteDao().getAllNotes();
-                }
-
-                @Override
-                protected void onPostExecute(List<Note> notes) {
-                    super.onPostExecute(notes);
-                    if(requestCode == REQUEST_CODE_SHOW_NOTE) {
-                        noteList.addAll(notes);
-                        notesAdapter.notifyDataSetChanged();
-                    }else if(requestCode == REQUEST_CODE_ADD_NOTE) {
-                        noteList.add(0, notes.get(0));
-                        notesAdapter.notifyItemInserted(0);
-                        notesRecyclerView.smoothScrollToPosition(0);
-                    }else if (requestCode == REQUEST_CODE_UPDATE_NOTE) {
-                        noteList.remove(noteClickedPosition);
-                        if(isNoteDeleted){
-                            notesAdapter.notifyItemRemoved(noteClickedPosition);
-                        }else {
-                            noteList.add(noteClickedPosition, notes.get(noteClickedPosition));
-                            notesAdapter.notifyItemChanged(noteClickedPosition);
-                        }
-                    }
-                }
+            @Override
+            protected List<Note> doInBackground(Void... voids) {
+                return NotesDatabase
+                        .getNotesDatabase(getApplicationContext())
+                        .noteDao().getAllNotes();
             }
-            new GetNotesTask().execute();
-    }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if(requestCode == REQUEST_CODE_ADD_NOTE && resultCode == RESULT_OK) {
-            getNotes(REQUEST_CODE_ADD_NOTE, false);
-        }else if(requestCode == REQUEST_CODE_UPDATE_NOTE && resultCode == RESULT_OK) {
-            if(data != null) {
-                getNotes(REQUEST_CODE_UPDATE_NOTE, data.getBooleanExtra("isNoteDeleted",false));
-            }
-        }else if(requestCode == REQUEST_CODE_SELECT_IMAGE && resultCode == RESULT_OK) {
-            if(data != null){
-                Uri selectedImageUri = data.getData();
-                if(selectedImageUri != null){
-                    try{
-                        String selectedImagePath = getPathFromUri(selectedImageUri);
-                        Intent intent = new Intent(getApplicationContext(), CreateNoteActivity.class);
-                        intent.putExtra("isFromQuickActions", true);
-                        intent.putExtra("quickActionType", "image");
-                        intent.putExtra("imagePath", selectedImagePath);
-                        startActivityForResult(intent, REQUEST_CODE_ADD_NOTE);
-                    } catch (Exception exception) {
-                        Toast.makeText(this, exception.getMessage(), Toast.LENGTH_SHORT).show();
+            @Override
+            protected void onPostExecute(List<Note> notes) {
+                super.onPostExecute(notes);
+                if(requestCode == REQUEST_CODE_SHOW_NOTE) {
+                    noteList.addAll(notes);
+                    notesAdapter.notifyDataSetChanged();
+                }else if(requestCode == REQUEST_CODE_ADD_NOTE) {
+                    noteList.add(0, notes.get(0));
+                    notesAdapter.notifyItemInserted(0);
+                    notesRecyclerView.smoothScrollToPosition(0);
+                }else if (requestCode == REQUEST_CODE_UPDATE_NOTE) {
+                    noteList.remove(noteClickedPosition);
+                    if(isNoteDeleted){
+                        notesAdapter.notifyItemRemoved(noteClickedPosition);
+                    }else {
+                        noteList.add(noteClickedPosition, notes.get(noteClickedPosition));
+                        notesAdapter.notifyItemChanged(noteClickedPosition);
                     }
                 }
             }
         }
+        new GetNotesTask().execute();
     }
+
+//    @Override
+//    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+//        super.onActivityResult(requestCode, resultCode, data);
+//        if(requestCode == REQUEST_CODE_ADD_NOTE && resultCode == RESULT_OK) {
+//            getNotes(REQUEST_CODE_ADD_NOTE, false);
+//        }else if(requestCode == REQUEST_CODE_UPDATE_NOTE && resultCode == RESULT_OK) {
+//            if(data != null) {
+//                getNotes(REQUEST_CODE_UPDATE_NOTE, data.getBooleanExtra("isNoteDeleted",false));
+//            }
+//        }else if(requestCode == REQUEST_CODE_SELECT_IMAGE && resultCode == RESULT_OK) {
+//            if(data != null){
+//                Uri selectedImageUri = data.getData();
+//                if(selectedImageUri != null){
+//                    try{
+//                        String selectedImagePath = getPathFromUri(selectedImageUri);
+//                        Intent intent = new Intent(getApplicationContext(), CreateNoteActivity.class);
+//                        intent.putExtra("isFromQuickActions", true);
+//                        intent.putExtra("quickActionType", "image");
+//                        intent.putExtra("imagePath", selectedImagePath);
+//                        startActivityForResult(intent, REQUEST_CODE_ADD_NOTE);
+//                    } catch (Exception exception) {
+//                        Toast.makeText(this, exception.getMessage(), Toast.LENGTH_SHORT).show();
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     private void showAddURLDialog() {
         if (dialogAddURL == null) {
